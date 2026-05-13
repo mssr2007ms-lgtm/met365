@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { CATEGORIES } from '@/lib/data'
+import SearchBar from '@/components/SearchBar'
 
 export default function HomePage() {
   const blackCategories = CATEGORIES.filter(c => c.group === 'black')
@@ -17,16 +18,7 @@ export default function HomePage() {
           <p className="text-[#64748b] text-lg mb-8 max-w-xl">
             Прямые цены от проверенных поставщиков — производителей и металлобаз. Без посредников.
           </p>
-          <div className="flex gap-2 max-w-2xl">
-            <input
-              type="text"
-              placeholder="Найти сортамент, например «арматура 12мм»"
-              className="flex-1 px-4 py-3 rounded-lg border border-[#e2e8f0] bg-white text-sm focus:outline-none focus:border-[#e85d04] transition-colors"
-            />
-            <button className="px-6 py-3 bg-[#e85d04] hover:bg-[#dc2f02] text-white text-sm font-medium rounded-lg transition-colors">
-              Найти
-            </button>
-          </div>
+          <SearchBar />
         </div>
       </section>
 
