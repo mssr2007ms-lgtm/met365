@@ -1,16 +1,15 @@
 import { notFound } from 'next/navigation'
-import { CATEGORIES, PRODUCTS, PRICES, SUPPLIERS } from '@/lib/data'
+import { getCategoryBySlug, getProductsByCategory, getPricesByProduct } from '@/lib/db'
 
 export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const category = CATEGORIES.find(c => c.slug === slug)
+  const category = await getCategoryBySlug(slug)
   if (!category) notFound()
 
-  const products = PRODUCTS.filter(p => p.categoryId === category.id)
+  const products = await getProductsByCategory(category.id)
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Breadcrumb */}
       <nav className="text-sm text-[#64748b] mb-6">
         <a href="/" className="hover:text-[#e85d04]">Главная</a>
         {' / '}
@@ -20,9 +19,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
       </nav>
 
       <h1 className="text-2xl font-bold text-[#1a1a1a] mb-2">{category.name}</h1>
-      <p className="text-sm text-[#64748b] mb-8">
-        Цены от проверенных поставщиков — обновляются ежедневно
-      </p>
+      <p className="text-sm text-[#64748b] mb-8">Цены от проверенных поставщиков — обновляются ежедневно</p>
 
       {products.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e2e8f0] p-8 text-center text-[#64748b]">
@@ -30,9 +27,9 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         </div>
       ) : (
         <div className="space-y-6">
-          {products.map(product => {
-            const prices = PRICES.filter(p => p.productId === product.id).sort((a, b) => a.pricePerTon - b.pricePerTon)
-            const minPrice = prices.find(p => !p.isPremium)?.pricePerTon
+          {await Promise.all(products.map(async (product: any) => {
+            const prices = await getPricesByProduct(product.id)
+            const minPrice = prices.find((p: any) => !p.is_premium)?.price_per_ton
 
             return (
               <div key={product.id} className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
@@ -44,12 +41,11 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
                   {minPrice && (
                     <div className="text-right">
                       <div className="text-xs text-[#64748b]">от</div>
-                      <div className="font-bold text-[#1a1a1a]">{minPrice.toLocaleString('ru-RU')} ₽/т</div>
+                      <div className="font-bold text-[#1a1a1a]">{Number(minPrice).toLocaleString('ru-RU')} ₽/т</div>
                     </div>
                   )}
                 </div>
 
-                {/* Таблица цен */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -63,57 +59,42 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f1f5f9]">
-                      {prices.map((price, i) => {
-                        const supplier = SUPPLIERS.find(s => s.id === price.supplierId)
-                        const isBest = i === 0
-
-                        return (
-                          <tr key={price.id} className="hover:bg-[#f8f9fa] transition-colors">
-                            <td className="px-5 py-3 font-medium text-[#1a1a1a]">
-                              {supplier?.name}
-                              {isBest && (
-                                <span className="ml-2 text-xs bg-[#fef3e2] text-[#e85d04] px-1.5 py-0.5 rounded">
-                                  лучшая
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-5 py-3 text-[#64748b]">{supplier?.city}</td>
-                            <td className="px-5 py-3 text-[#64748b]">{price.size}</td>
-                            <td className="px-5 py-3">
-                              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                price.inStock
-                                  ? 'bg-[#f0fdf4] text-[#16a34a]'
-                                  : 'bg-[#fef2f2] text-[#dc2626]'
-                              }`}>
-                                {price.inStock ? 'В наличии' : 'Под заказ'}
-                              </span>
-                            </td>
-                            <td className="px-5 py-3 text-right font-semibold text-[#1a1a1a]">
-                              {price.pricePerTon.toLocaleString('ru-RU')}
-                            </td>
-                            <td className="px-5 py-3 text-right">
-                              {price.isPremium ? (
-                                <span className="text-xs text-[#64748b] border border-[#e2e8f0] px-2 py-1 rounded cursor-pointer hover:border-[#e85d04] hover:text-[#e85d04] transition-colors">
-                                  Подписка
-                                </span>
-                              ) : (
-                                <span className="text-xs bg-[#e85d04] hover:bg-[#dc2f02] text-white px-2 py-1 rounded cursor-pointer transition-colors">
-                                  Показать
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
+                      {prices.map((price: any, i: number) => (
+                        <tr key={price.id} className="hover:bg-[#f8f9fa] transition-colors">
+                          <td className="px-5 py-3 font-medium text-[#1a1a1a]">
+                            {price.suppliers?.name}
+                            {i === 0 && (
+                              <span className="ml-2 text-xs bg-[#fef3e2] text-[#e85d04] px-1.5 py-0.5 rounded">лучшая</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3 text-[#64748b]">{price.suppliers?.city}</td>
+                          <td className="px-5 py-3 text-[#64748b]">{price.size}</td>
+                          <td className="px-5 py-3">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${price.in_stock ? 'bg-[#f0fdf4] text-[#16a34a]' : 'bg-[#fef2f2] text-[#dc2626]'}`}>
+                              {price.in_stock ? 'В наличии' : 'Под заказ'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-right font-semibold text-[#1a1a1a]">
+                            {Number(price.price_per_ton).toLocaleString('ru-RU')}
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            {price.is_premium ? (
+                              <span className="text-xs text-[#64748b] border border-[#e2e8f0] px-2 py-1 rounded cursor-pointer hover:border-[#e85d04] hover:text-[#e85d04] transition-colors">Подписка</span>
+                            ) : (
+                              <span className="text-xs bg-[#e85d04] hover:bg-[#dc2f02] text-white px-2 py-1 rounded cursor-pointer transition-colors">Показать</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
                 <div className="px-5 py-2.5 text-xs text-[#64748b] bg-[#f8f9fa]">
-                  Обновлено: {prices[0]?.updatedAt}
+                  Обновлено: {prices[0]?.updated_at}
                 </div>
               </div>
             )
-          })}
+          }))}
         </div>
       )}
     </div>
