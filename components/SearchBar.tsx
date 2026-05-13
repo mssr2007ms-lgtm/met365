@@ -1,7 +1,14 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { CATEGORIES } from '@/lib/data'
+import { CATEGORIES, PRODUCTS, PRICES } from '@/lib/data'
+
+interface SearchResult {
+  type: 'category' | 'product'
+  label: string
+  sublabel: string
+  href: string
+}
 
 export default function SearchBar() {
   const [query, setQuery] = useState('')
@@ -9,9 +16,57 @@ export default function SearchBar() {
   const router = useRouter()
   const ref = useRef<HTMLDivElement>(null)
 
-  const results = query.length >= 2
-    ? CATEGORIES.filter(c => c.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
-    : []
+  const results: SearchResult[] = query.length >= 2 ? (() => {
+    const q = query.toLowerCase()
+    const items: SearchResult[] = []
+
+    // Поиск по категориям
+    CATEGORIES
+      .filter(c => c.name.toLowerCase().includes(q))
+      .slice(0, 3)
+      .forEach(cat => {
+        const groupLabel = cat.group === 'black' ? 'Чёрный металл' : cat.group === 'stainless' ? 'Нержавейка' : 'Цветной металл'
+        items.push({ type: 'category', label: cat.name, sublabel: groupLabel, href: `/catalog/${cat.slug}` })
+      })
+
+    // Поиск по позициям + размерам
+    PRODUCTS
+      .filter(p => p.name.toLowerCase().includes(q))
+      .forEach(product => {
+        const cat = CATEGORIES.find(c => c.id === product.categoryId)
+        if (!cat) return
+        const sizes = [...new Set(PRICES.filter(pr => pr.productId === product.id).map(pr => pr.size))]
+        if (sizes.length === 0) {
+          items.push({ type: 'product', label: product.name, sublabel: product.standard, href: `/catalog/${cat.slug}` })
+        } else {
+          sizes.slice(0, 3).forEach(size => {
+            const label = `${product.name} ${size}`
+            if (label.toLowerCase().includes(q)) {
+              items.push({ type: 'product', label, sublabel: product.standard, href: `/catalog/${cat.slug}` })
+            }
+          })
+          // Если сам продукт подходит — добавить без размера тоже
+          if (items.findIndex(i => i.label === product.name) === -1) {
+            items.push({ type: 'product', label: product.name, sublabel: `${product.standard} · ${sizes.join(', ')}`, href: `/catalog/${cat.slug}` })
+          }
+        }
+      })
+
+    // Поиск по размерам напрямую
+    PRICES
+      .filter(p => p.size.toLowerCase().includes(q))
+      .forEach(price => {
+        const product = PRODUCTS.find(p => p.id === price.productId)
+        const cat = product && CATEGORIES.find(c => c.id === product.categoryId)
+        if (!product || !cat) return
+        const label = `${product.name} ${price.size}`
+        if (!items.find(i => i.label === label)) {
+          items.push({ type: 'product', label, sublabel: product.standard, href: `/catalog/${cat.slug}` })
+        }
+      })
+
+    return items.slice(0, 8)
+  })() : []
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -21,15 +76,15 @@ export default function SearchBar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  function handleSelect(slug: string) {
+  function handleSelect(href: string) {
     setQuery('')
     setOpen(false)
-    router.push(`/catalog/${slug}`)
+    router.push(href)
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (results.length === 1) handleSelect(results[0].slug)
+    if (results.length === 1) handleSelect(results[0].href)
     else if (results.length > 1) setOpen(true)
   }
 
@@ -41,7 +96,7 @@ export default function SearchBar() {
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true) }}
           onFocus={() => query.length >= 2 && setOpen(true)}
-          placeholder="Найти сортамент, например «арматура» или «уголок»"
+          placeholder="Найти сортамент, например «арматура 12мм» или «уголок»"
           className="flex-1 px-4 py-3 rounded-lg border border-[#e2e8f0] bg-white text-sm focus:outline-none focus:border-[#e85d04] transition-colors"
         />
         <button
@@ -54,16 +109,14 @@ export default function SearchBar() {
 
       {open && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#e2e8f0] rounded-lg shadow-lg z-50 overflow-hidden">
-          {results.map(cat => (
+          {results.map((item, i) => (
             <button
-              key={cat.id}
-              onMouseDown={() => handleSelect(cat.slug)}
+              key={i}
+              onMouseDown={() => handleSelect(item.href)}
               className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#f8f9fa] flex items-center justify-between group"
             >
-              <span className="text-[#1a1a1a] group-hover:text-[#e85d04] transition-colors">{cat.name}</span>
-              <span className="text-xs text-[#64748b]">
-                {cat.group === 'black' ? 'Чёрный металл' : cat.group === 'stainless' ? 'Нержавейка' : 'Цветной'}
-              </span>
+              <span className="text-[#1a1a1a] group-hover:text-[#e85d04] transition-colors">{item.label}</span>
+              <span className="text-xs text-[#64748b] ml-4 shrink-0">{item.sublabel}</span>
             </button>
           ))}
         </div>
